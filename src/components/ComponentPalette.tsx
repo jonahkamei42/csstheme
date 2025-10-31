@@ -1,135 +1,106 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { Box, Square, Layout, Navigation, Columns, Grid3x3, List, ChevronRight, ChevronLeft } from 'lucide-react';
 import { ComponentPaletteItem } from '../types';
+import clsx from 'clsx';
 
-interface ComponentPaletteProps {
-  onDragStart: (type: ComponentPaletteItem['type']) => void;
-  isCollapsed: boolean;
-  onToggle: () => void;
-}
+interface ComponentPaletteProps {}
 
 const paletteItems: ComponentPaletteItem[] = [
-  {
-    type: 'container',
-    label: 'Container',
-    icon: 'Box',
-    defaultWidth: 400,
-    defaultHeight: 300,
-    defaultStyles: { backgroundColor: '#f3f4f6', padding: '20px', borderRadius: '8px' }
-  },
-  {
-    type: 'box',
-    label: 'Box',
-    icon: 'Square',
-    defaultWidth: 200,
-    defaultHeight: 150,
-    defaultStyles: { backgroundColor: '#dbeafe', padding: '16px', borderRadius: '6px' }
-  },
-  {
-    type: 'button',
-    label: 'Button',
-    icon: 'Square',
-    defaultWidth: 120,
-    defaultHeight: 40,
-    defaultStyles: { backgroundColor: '#3b82f6', padding: '8px 16px', borderRadius: '6px' }
-  },
-  {
-    type: 'header',
-    label: 'Header',
-    icon: 'Layout',
-    defaultWidth: 800,
-    defaultHeight: 80,
-    defaultStyles: { backgroundColor: '#1f2937', padding: '20px', display: 'flex' }
-  },
-  {
-    type: 'footer',
-    label: 'Footer',
-    icon: 'Layout',
-    defaultWidth: 800,
-    defaultHeight: 60,
-    defaultStyles: { backgroundColor: '#374151', padding: '16px' }
-  },
-  {
-    type: 'sidebar',
-    label: 'Sidebar',
-    icon: 'Navigation',
-    defaultWidth: 250,
-    defaultHeight: 500,
-    defaultStyles: { backgroundColor: '#1e293b', padding: '20px' }
-  },
-  {
-    type: 'nav',
-    label: 'Navigation',
-    icon: 'Navigation',
-    defaultWidth: 600,
-    defaultHeight: 50,
-    defaultStyles: { backgroundColor: '#0f172a', padding: '12px', display: 'flex', gap: '16px' }
-  },
-  {
-    type: 'flex',
-    label: 'Flex Container',
-    icon: 'Columns',
-    defaultWidth: 400,
-    defaultHeight: 200,
-    defaultStyles: { backgroundColor: '#fef3c7', padding: '16px', display: 'flex', gap: '12px', flexDirection: 'row' }
-  },
-  {
-    type: 'grid',
-    label: 'Grid Container',
-    icon: 'Grid3x3',
-    defaultWidth: 400,
-    defaultHeight: 300,
-    defaultStyles: { backgroundColor: '#e9d5ff', padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }
-  },
-  {
-    type: 'list',
-    label: 'List',
-    icon: 'List',
-    defaultWidth: 300,
-    defaultHeight: 200,
-    defaultStyles: { backgroundColor: '#fce7f3', padding: '16px' }
-  }
+  { type: 'container', label: 'Container', icon: 'Box' },
+  { type: 'flex', label: 'Flex', icon: 'Columns' },
+  { type: 'grid', label: 'Grid', icon: 'Grid3x3' },
+  { type: 'box', label: 'Box', icon: 'Square' },
+  { type: 'button', label: 'Button', icon: 'Square' },
+  { type: 'header', label: 'Header', icon: 'Layout' },
+  { type: 'footer', label: 'Footer', icon: 'Layout' },
+  { type: 'sidebar', label: 'Sidebar', icon: 'Navigation' },
+  { type: 'nav', label: 'Navigation', icon: 'Navigation' },
+  { type: 'list', label: 'List', icon: 'List' },
 ];
 
-const iconMap = {
-  Box,
-  Square,
-  Layout,
-  Navigation,
-  Columns,
-  Grid3x3,
-  List
-};
+const iconMap = { Box, Square, Layout, Navigation, Columns, Grid3x3, List };
 
-export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ onDragStart, isCollapsed, onToggle }) => {
+export const ComponentPalette: React.FC<ComponentPaletteProps> = () => {
+  const [isCollapsed, setCollapsed] = useState(false);
+  const [width, setWidth] = useState(240); // Default width (corresponds to w-60)
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  const handleDragStart = (e: React.DragEvent, type: ComponentPaletteItem['type']) => {
+    e.dataTransfer.setData('application/reactflow', type);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarRef.current!.offsetWidth;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = startWidth + (e.clientX - startX);
+      if (newWidth >= 180 && newWidth <= 500) { // Min and max width constraints
+        setWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const toggleCollapse = () => {
+    setCollapsed(prev => !prev);
+  };
+
   return (
-    <div className={`bg-gray-900 text-white transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-64'} flex-shrink-0 overflow-hidden`}>
-      <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+    <div
+      ref={sidebarRef}
+      className="bg-gray-900 text-white transition-[width] duration-300 ease-in-out flex-shrink-0 flex flex-col relative"
+      style={{ width: isCollapsed ? 64 : width }}
+    >
+      <div className="p-4 border-b border-gray-700 flex items-center justify-between sticky top-0 bg-gray-900 z-10">
         {!isCollapsed && <h2 className="text-lg font-semibold">Components</h2>}
         <button
-          onClick={onToggle}
+          onClick={toggleCollapse}
           className="p-1 hover:bg-gray-800 rounded"
+          title={isCollapsed ? 'Expand Palette' : 'Collapse Palette'}
         >
           {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
         </button>
       </div>
       
-      <div className="p-4 space-y-2">
+      <div className="flex-1 p-2 space-y-2 overflow-y-auto">
         {paletteItems.map((item) => {
           const Icon = iconMap[item.icon as keyof typeof iconMap];
           return (
             <div
               key={item.type}
               draggable
-              onDragStart={() => onDragStart(item.type)}
-              className={`${isCollapsed ? 'p-2 justify-center' : 'p-3'} bg-gray-800 rounded-lg cursor-move hover:bg-gray-700 transition-colors flex items-center gap-3`}
+              onDragStart={(e) => handleDragStart(e, item.type)}
+              className={clsx(
+                'bg-gray-800 rounded-lg cursor-move hover:bg-blue-600 transition-colors flex items-center gap-3 group',
+                isCollapsed ? 'p-3 justify-center' : 'p-3'
+              )}
+              title={isCollapsed ? item.label : ''}
             >
               <Icon size={20} className="flex-shrink-0" />
-              {!isCollapsed && <span className="text-sm">{item.label}</span>}
+              {!isCollapsed && <span className="text-sm whitespace-nowrap">{item.label}</span>}
             </div>
           );
         })}
       </div>
+
+      {!isCollapsed && (
+        <div
+          onMouseDown={handleResizeMouseDown}
+          className="absolute top-0 -right-1 h-full w-2 cursor-col-resize group z-20"
+        >
+          <div className="w-0.5 h-full bg-transparent group-hover:bg-blue-500 transition-colors duration-200" />
+        </div>
+      )}
     </div>
   );
 };

@@ -5,26 +5,47 @@ export interface ElementData {
   y: number;
   width: number;
   height: number;
-  children?: string[];
+  children: string[];
   parentId?: string;
   styles: {
-    backgroundColor?: string;
+    // Layout
+    display?: string;
+    position?: 'absolute' | 'relative';
+    zIndex?: number;
+    
+    // Sizing & Spacing
     padding?: string;
     margin?: string;
-    display?: string;
-    flexDirection?: string;
-    gridTemplateColumns?: string;
-    gap?: string;
+    
+    // Appearance
+    backgroundColor?: string;
+    color?: string;
     borderRadius?: string;
     border?: string;
+    boxShadow?: string;
+
+    // Typography
+    fontSize?: string;
+    fontWeight?: string;
+    
+    // Flexbox & Grid
+    flexDirection?: string;
+    justifyContent?: string;
+    alignItems?: string;
+    gridTemplateColumns?: string;
+    gap?: string;
   };
+}
+
+export interface ComponentConfig {
+  defaultWidth: number;
+  defaultHeight: number;
+  defaultStyles: Partial<ElementData['styles']>;
+  isContainer?: boolean;
 }
 
 export interface ComponentPaletteItem {
   type: ElementData['type'];
   label: string;
   icon: string;
-  defaultWidth: number;
-  defaultHeight: number;
-  defaultStyles: ElementData['styles'];
 }

@@ -1,171 +1,154 @@
 import React, { useState } from 'react';
 import { Copy, Check, Code, X } from 'lucide-react';
-import { ElementData } from '../types';
+import { useBuilderStore } from '../store/useBuilderStore';
+import toast from 'react-hot-toast';
 
 interface CSSOutputProps {
-  elements: ElementData[];
   isOpen: boolean;
   onClose: () => void;
 }
 
-export const CSSOutput: React.FC<CSSOutputProps> = ({ elements, isOpen, onClose }) => {
+const formatCss = (css: string) => {
+  let indentLevel = 0;
+  const lines = css.split('\n');
+  let formatted = '';
+  lines.forEach(line => {
+    if (line.includes('}')) indentLevel = Math.max(0, indentLevel - 1);
+    formatted += '  '.repeat(indentLevel) + line.trim() + '\n';
+    if (line.includes('{')) indentLevel++;
+  });
+  return formatted.trim();
+};
+
+export const CSSOutput: React.FC<CSSOutputProps> = ({ isOpen, onClose }) => {
+  const { elements } = useBuilderStore();
   const [copied, setCopied] = useState(false);
 
-  const generateCSS = (): string => {
-    let css = '/* Generated CSS */\n\n';
-    
-    elements.forEach((element, index) => {
-      const className = `${element.type}-${index + 1}`;
+  const generateCode = () => {
+    let css = '';
+    let html = '';
+    const rootElements = Object.values(elements).filter(el => !el.parentId);
+
+    const generateElementCode = (elementId: string, indent = 0) => {
+      const element = elements[elementId];
+      if (!element) return;
+
+      const className = `${element.type}-${element.id.substring(0, 4)}`;
+      const indentation = '  '.repeat(indent);
+      const tagName = element.type === 'button' ? 'button' : 'div';
+      
+      html += `${indentation}<${tagName} class="${className}">\n`;
+      if (element.children.length > 0) {
+        element.children.forEach(childId => generateElementCode(childId, indent + 1));
+      } else {
+        html += `${indentation}  ${element.type.charAt(0).toUpperCase() + element.type.slice(1)}\n`;
+      }
+      html += `${indentation}</${tagName}>\n`;
+
       css += `.${className} {\n`;
+      // For nested elements, their parent will be a positioned element,
+      // so their absolute positioning will be relative to the parent.
       css += `  position: absolute;\n`;
       css += `  left: ${element.x}px;\n`;
       css += `  top: ${element.y}px;\n`;
       css += `  width: ${element.width}px;\n`;
       css += `  height: ${element.height}px;\n`;
       
-      if (element.styles.backgroundColor) {
-        css += `  background-color: ${element.styles.backgroundColor};\n`;
-      }
-      if (element.styles.padding) {
-        css += `  padding: ${element.styles.padding};\n`;
-      }
-      if (element.styles.margin) {
-        css += `  margin: ${element.styles.margin};\n`;
-      }
-      if (element.styles.borderRadius) {
-        css += `  border-radius: ${element.styles.borderRadius};\n`;
-      }
-      if (element.styles.border) {
-        css += `  border: ${element.styles.border};\n`;
-      }
-      if (element.styles.display) {
-        css += `  display: ${element.styles.display};\n`;
-      }
-      if (element.styles.flexDirection) {
-        css += `  flex-direction: ${element.styles.flexDirection};\n`;
-      }
-      if (element.styles.gridTemplateColumns) {
-        css += `  grid-template-columns: ${element.styles.gridTemplateColumns};\n`;
-      }
-      if (element.styles.gap) {
-        css += `  gap: ${element.styles.gap};\n`;
-      }
-      
-      css += '}\n\n';
-    });
-
-    return css;
-  };
-
-  const generateHTML = (): string => {
-    let html = '<!-- Generated HTML -->\n';
-    
-    elements.forEach((element, index) => {
-      const className = `${element.type}-${index + 1}`;
-      const tagName = element.type === 'button' ? 'button' : 'div';
-      html += `<${tagName} class="${className}">${element.type.charAt(0).toUpperCase() + element.type.slice(1)}</${tagName}>\n`;
-    });
-
-    return html;
-  };
-
-  const handleCopy = () => {
-    const html = generateHTML();
-    const css = generateCSS();
-    const fullCode = `${html}\n\n${css}`;
-
-    const fallbackCopy = (text: string) => {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      
-      // Make the textarea out of sight
-      textArea.style.position = 'fixed';
-      textArea.style.top = '-9999px';
-      textArea.style.left = '-9999px';
-
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-
-      try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        } else {
-          console.error('Fallback: Unable to copy');
-          alert('Failed to copy code. Please copy it manually.');
+      Object.entries(element.styles).forEach(([key, value]) => {
+        if (value) {
+          const cssKey = key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+          css += `  ${cssKey}: ${value};\n`;
         }
-      } catch (err) {
-        console.error('Fallback: Oops, unable to copy', err);
-        alert('Failed to copy code. Please copy it manually.');
-      }
-
-      document.body.removeChild(textArea);
+      });
+      css += '}\n\n';
     };
 
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(fullCode).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }).catch(err => {
-        console.warn('Clipboard API failed. Falling back to execCommand.', err);
-        fallbackCopy(fullCode);
-      });
-    } else {
-      fallbackCopy(fullCode);
+    const generateRecursive = (el: typeof rootElements[0]) => {
+        generateElementCode(el.id, 0);
+        // We need to generate CSS for all descendants as well
+        const queue = [...el.children];
+        while(queue.length > 0) {
+            const childId = queue.shift()!;
+            const child = elements[childId];
+            if (child) {
+                generateElementCode(child.id);
+                queue.push(...child.children);
+            }
+        }
     }
+
+    // Generate code for all elements, ensuring nested ones are processed
+    Object.values(elements).forEach(el => generateElementCode(el.id));
+
+
+    const generateHtmlStructure = (elementId: string, indent = 0) => {
+        const element = elements[elementId];
+        if (!element) return '';
+        
+        const className = `${element.type}-${element.id.substring(0, 4)}`;
+        const indentation = '  '.repeat(indent);
+        const tagName = element.type === 'button' ? 'button' : 'div';
+        
+        let elementHtml = `${indentation}<${tagName} class="${className}">\n`;
+        if (element.children.length > 0) {
+            element.children.forEach(childId => {
+                elementHtml += generateHtmlStructure(childId, indent + 1);
+            });
+        } else {
+            elementHtml += `${indentation}  ${element.type.charAt(0).toUpperCase() + element.type.slice(1)}\n`;
+        }
+        elementHtml += `${indentation}</${tagName}>\n`;
+        return elementHtml;
+    };
+
+    html = rootElements.map(el => generateHtmlStructure(el.id)).join('');
+
+
+    return { html, css: formatCss(css) };
+  };
+
+  const { html, css } = generateCode();
+
+  const handleCopy = () => {
+    const fullCode = `<!-- HTML -->\n${html}\n\n/* CSS */\n<style>\n${css}\n</style>`;
+    navigator.clipboard.writeText(fullCode).then(() => {
+      setCopied(true);
+      toast.success('Code copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => toast.error('Failed to copy code.'));
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <header className="p-4 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Code size={20} />
             <h2 className="text-xl font-semibold">Generated Code</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded"
-          >
-            <X size={20} />
-          </button>
-        </div>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X size={22} /></button>
+        </header>
         
-        <div className="flex-1 overflow-auto p-4">
-          <div className="mb-4">
+        <main className="flex-1 overflow-auto p-6 grid grid-cols-2 gap-6">
+          <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-2">HTML</h3>
-            <pre className="bg-gray-50 p-4 rounded border border-gray-200 text-sm overflow-x-auto">
-              <code>{generateHTML()}</code>
-            </pre>
+            <pre className="bg-gray-900 text-white p-4 rounded-lg text-sm overflow-x-auto h-[calc(100%-2rem)]"><code>{html}</code></pre>
           </div>
-          
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-2">CSS</h3>
-            <pre className="bg-gray-50 p-4 rounded border border-gray-200 text-sm overflow-x-auto">
-              <code>{generateCSS()}</code>
-            </pre>
+            <pre className="bg-gray-900 text-white p-4 rounded-lg text-sm overflow-x-auto h-[calc(100%-2rem)]"><code>{css}</code></pre>
           </div>
-        </div>
+        </main>
         
-        <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg"
-          >
-            Close
-          </button>
-          <button
-            onClick={handleCopy}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
-          >
+        <footer className="p-4 border-t border-gray-200 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">Close</button>
+          <button onClick={handleCopy} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2">
             {copied ? <Check size={18} /> : <Copy size={18} />}
             {copied ? 'Copied!' : 'Copy All'}
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   );
